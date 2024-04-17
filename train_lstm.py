@@ -100,6 +100,9 @@ def train(model, dataloader, epoch, learning_rate, teacher_forcing_ratio):
         total_loss = 0
         for batch_idx, (source, target) in enumerate(dataloader):
             # Your code to loop through batches in a torch Dataloader goes here
+            for i in range(len(source)):
+                source[i] = source[i].permute(1, 0, 2)
+            target = target.permute(1, 0, 2)
             optimizer.zero_grad()
             # TODO might need to split source into code, ast, doc
             outputs = model(source, target, teacher_forcing_ratio)
@@ -125,6 +128,9 @@ def test(model, dataloader):
     with torch.no_grad():
         generations = []
         for idx, (source, target) in enumerate(dataloader):
+            for i in range(len(source)):
+                source[i] = source[i].permute(1, 0, 2)
+            target = target.permute(1, 0, 2)
             outputs = model(source, target, 0)
             loss = criterion(outputs.view(-1, outputs.shape[-1]), target.view(-1))
             total_loss += loss.item()
