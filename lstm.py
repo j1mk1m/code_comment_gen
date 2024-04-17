@@ -22,7 +22,9 @@ class Encoder(nn.Module):
 
     def forward(self, x):
         # x = (L, B, D)
+        print(x.shape)
         embedded = self.dropout(self.embedding(x))
+        print(embedded.shape)
         # embedded = (L, B, E)
         outputs, (hidden, cell) = self.lstm(embedded)
         # outputs = (L, B, 2 * H), hidden = (2 * num_layers, B, H)
@@ -96,6 +98,8 @@ class MultiSeq2Seq(nn.Module):
         # source = list of tensors of shape (L, B, D)
         # e.g. code = (Lc, B, Dc), ast = (La, B, Da), doc = (Ld, B, Dd)
         assert len(source) == len(self.encoders)
+
+        
         # comment/output = (Lo, B, _)
         batch_size = source[0].shape[1]
         output_length = comment.shape[0]
@@ -108,6 +112,8 @@ class MultiSeq2Seq(nn.Module):
         for i in range(len(self.encoders)):
             encoder = self.encoders[i]
             input = source[i]
+            print(input.shape)
+            input = input.permute(1,0,2)
             out, (hid, cell) = encoder(input)
             enc_outputs.append(out)
             enc_hidden.append(hid)
