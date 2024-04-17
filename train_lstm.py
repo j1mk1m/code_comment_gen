@@ -2,6 +2,9 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 import torch.nn.functional as F
+from torch.utils.data import Dataset, DataLoader
+from collections import Counter
+import pandas as pd
 
 import argparse
 import wandb
@@ -19,6 +22,8 @@ def idx_to_token(index):
 - index to token (for comments)
 - token sequence to sentence (for comments)
 """
+# Dataloader
+BATCH_SIZE = 32
 
 # Code Encoder
 CODE_DIM = 64
@@ -43,6 +48,38 @@ DEC_NUM_LAYERS = 1
 DEC_DROPOUT = 0.5
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+class CustomDataset(Dataset):
+    def __init__(self, data, vocab_size):
+        self.data = list(data.apply(lambda x: list(x)))
+        
+        all_words = [word for sentence in data for word in sentence]
+        word_freq = Counter(all_words)
+        
+        most_common_words = word_freq.most_common(vocab_size)
+        
+        self.vocabulary = {word: idx for idx, (word, _) in enumerate(most_common_words)}
+        
+        self.unknown_token = '<unk>'
+        self.vocabulary[self.unknown_token] = len(self.vocabulary)
+        
+        self.reverse_vocab = {id:word for word,id in self.vocabular.items()}
+
+        self.one_hot_encoded = [self.sentence_to_one_hot(sentence) for sentence in data]
+
+    def sentence_to_one_hot(self, sentence):
+        indices = [self.vocabulary.get(word, self.vocabulary[self.unknown_token]) for word in sentence]
+        return torch.nn.functional.one_hot(torch.tensor(indices).to(torch.int64), num_classes=len(self.vocabulary))
+    
+    def __len__(self):
+        return len(self.data)
+    
+    def __getitem__(self, idx):
+        return self.one_hot_encoded[idx]
+    
+def get_data_loader(series, vocab_size):
+    dataset = CustomDataset(series, vocab_size)
+    return DataLoader(dataset, batch_size=BATCH_SIZE, shuffle=True)
 
 def train(model, dataloader, epoch, learning_rate, teacher_forcing_ratio):
     criterion = nn.CrossEntropyLoss()
@@ -95,7 +132,7 @@ def test(model, dataloader):
         wandb.log({"test_loss": avg_loss})
     bleu_score = evaluate(generations, targets)
     return generations, bleu_score
-
+    
 if __name__=="__main__":
     parser = argparse.ArgumentParser("Train script for Code Comment Generation")
     parser.add_argument("--epoch", type=int, default=1000, help="Number of epochs")
@@ -161,9 +198,12 @@ if __name__=="__main__":
     # MultiSeq2Seq Model
     model = MultiSeq2Seq(encoders, decoder, attentions, device)
 
-    # TODO DATALOADER
-    train_loader = None
-    test_loader = None
+    # DATALOADER
+    df_train = pd.read_pickle('df_train_reduced.pkl')
+    df_test = pd.read_pickle('df_test_reduced.pkl')
+
+    train_loader = get_data_loader(df_train['processed_func_code_tokens'], 10000)
+    test_loader = get_data_loader(df_test['processed_doc_tokens'], 10000) 
 
     # TRAIN and EVAL
     train(model, train_loader, args.epoch, args.learning_rate, args.teacher_forcing_ratio)
