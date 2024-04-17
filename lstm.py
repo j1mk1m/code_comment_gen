@@ -44,6 +44,7 @@ class Decoder(nn.Module):
         self.lstm = nn.LSTM(self.context_dim + self.embed_dim, self.hidden_dim)
         self.out = nn.Linear(self.context_dim + self.embed_dim + self.hidden_dim, output_dim)
         self.dropout = nn.Dropout(dropout)
+        self.softmax = nn.Softmax(dim=1)
       
     def forward(self, x, hidden, context):
         # x = (B, D_out), hidden = (B, H_dec) x2, context = (1, B, H_enc)
@@ -51,7 +52,8 @@ class Decoder(nn.Module):
         embedded = self.dropout(self.embedding(x)) # embedded = (1, B, E_dec)
         out, (hidden, cell) = self.lstm(torch.cat((embedded, context), dim=2), hidden)
         # out = (1, B, H_dec)
-        prediction = self.out(torch.concat((embedded, context, out), dim=2))[0]
+        out, context, embedded = out[0], context[0], embedded[0]
+        prediction = self.softmax(self.out(torch.concat((embedded, context, out), dim=1)))
         # prediction = (B, D_out), hidden = (B, H_dec)
         return prediction, (hidden[0], cell[0])
 
@@ -125,6 +127,7 @@ class MultiSeq2Seq(nn.Module):
             decoder_output, (decoder_hidden, decoder_cell) = self.decoder(decoder_input, (decoder_hidden, decoder_cell), context)
             outputs[t] = decoder_output
             teacher_force = random.random() < teacher_forcing_ratio
-            decoder_input = (comment[t] if teacher_force else decoder_output) # or decoder_output
+            pred = decoder_output.argmax(1)
+            decoder_input = (comment[t] if teacher_force else pred) # or decoder_output
 
         return outputs
