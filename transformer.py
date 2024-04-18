@@ -14,7 +14,7 @@ class RotaryPositionalEmbeddings(nn.Module):
         self.sin_mat = None
 
     def _build_cache(self, x: torch.Tensor):
-        _, _, T, _ = x.size()
+        T, _, _ = x.size()
         i_vals = torch.arange(0, self.d//2, 1)
         exp_vals = -2 * i_vals / self.d
         theta_vals = torch.pow(self.base, exp_vals)
@@ -30,15 +30,16 @@ class RotaryPositionalEmbeddings(nn.Module):
     def forward(self, x: torch.Tensor):
         if self.cos_mat is None:
             self._build_cache(x)
-        _, _, T, _ = x.size()
+        T, _, _ = x.size()
         h1, h2 = torch.split(x, self.d//2, -1)
-        sin_input = torch.cat((-1*h2, h1), 3)
-        cos_input = torch.clone(x)
+        sin_input = torch.cat((-1*h2, h1), 2).permute(1,0,2)
+        cos_input = torch.clone(x).permute(1,0,2)
 
         cos_mat_trunc = self.cos_mat[:T, :]
         sin_mat_trunc = self.sin_mat[:T, :]
+
         out = cos_input*cos_mat_trunc + sin_input*sin_mat_trunc
-        return out
+        return out.permute(0,1,2)
     
 class Mask(nn.Module):
     def __init__(self):
@@ -67,7 +68,8 @@ class Transformer(nn.Module):
         self.pos_embed = RotaryPositionalEmbeddings(dk)
         self.encoder = nn.Embedding(n_embed, dk)
         self.decoder = nn.Embedding(n_embed, dk)
-        self.masker = Mask()
+        self.encode_masker = Mask()
+        self.decode_masker = Mask()
 
         self.transformer = nn.Transformer(dk, num_heads, num_encode, num_decode, dropout=dropout)
         self.linear_out = nn.Linear(dk, n_embed)
@@ -75,7 +77,12 @@ class Transformer(nn.Module):
     def forward(self, input, output):
         encode_input = self.pos_embed(self.encoder(input))
         decode_output = self.pos_embed(self.decoder(output))
-        transform_out = self.transformer(encode_input, decode_output, src_mask=self.masker.get_mask(len(input)), tgt_mask=self.masker.get_mask(len(output)))
+
+        _, input_len = input.size()
+        _, output_len = output.size()
+        input_mask = self.encode_masker.get_mask(input_len)
+        output_mask = self.decode_masker.get_mask(output_len)
+        transform_out = self.transformer(encode_input, decode_output, input_mask, output_mask)
         return self.linear_out(transform_out)
 
 
