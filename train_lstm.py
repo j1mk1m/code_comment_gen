@@ -23,11 +23,12 @@ def idx_to_token(index):
 - token sequence to sentence (for comments)
 """
 # Dataloader
-BATCH_SIZE = 32
+TRAIN_BATCH_SIZE = 32
+TEST_BATCH_SIZE = 1
 
 # Code Encoder
-CODE_DIM = 64
-CODE_ENC_EMBED_DIM = 50
+CODE_DIM = 10000
+CODE_ENC_EMBED_DIM = 64
 CODE_ENC_HIDDEN_DIM = 128
 CODE_ENC_DROPOUT = 0.5
 # AST Encoder
@@ -35,14 +36,14 @@ AST_DIM = 64
 AST_ENC_EMBED_DIM = 50
 AST_ENC_HIDDEN_DIM = 128
 AST_ENC_DROPOUT = 0.5
-# Doc Encoder TODO
+# Doc Encoder 
 DOC_DIM = 64
 DOC_ENC_EMBED_DIM = 50
 DOC_ENC_HIDDEN_DIM = 128
 DOC_ENC_DROPOUT = 0.5
 # Decoder
-OUTPUT_DIM = 100
-DEC_EMBED_DIM = 50
+OUTPUT_DIM = 10000
+DEC_EMBED_DIM = 64
 DEC_HIDDEN_DIM = 128
 DEC_NUM_LAYERS = 1
 DEC_DROPOUT = 0.5
@@ -79,7 +80,8 @@ class CustomDataset(Dataset):
 
     def sentence_to_one_hot(self, sentence, vocab):
         indices = [vocab.get(word, vocab[self.unknown_token]) for word in sentence]
-        return torch.nn.functional.one_hot(torch.tensor(indices).to(torch.int64), num_classes=len(vocab))
+        # return torch.nn.functional.one_hot(torch.tensor(indices).to(torch.int64), num_classes=len(vocab))
+        return torch.tensor(indices)
     
     def __len__(self):
         return len(self.data)
@@ -87,9 +89,9 @@ class CustomDataset(Dataset):
     def __getitem__(self, idx):
         return [self.input_encoded[idx]], self.output_encoded[idx]
     
-def get_data_loader(series):
+def get_data_loader(series, test = False):
     dataset = CustomDataset(series)
-    return DataLoader(dataset, batch_size=BATCH_SIZE, shuffle=True)
+    return DataLoader(dataset, batch_size=TEST_BATCH_SIZE if test == True else TRAIN_BATCH_SIZE, shuffle=True)
 
 def train(model, dataloader, epoch, learning_rate, teacher_forcing_ratio):
     criterion = nn.CrossEntropyLoss()
@@ -101,8 +103,8 @@ def train(model, dataloader, epoch, learning_rate, teacher_forcing_ratio):
         for batch_idx, (source, target) in enumerate(dataloader):
             # Your code to loop through batches in a torch Dataloader goes here
             for i in range(len(source)):
-                source[i] = source[i].permute(1, 0, 2)
-            target = target.permute(1, 0, 2)
+                source[i] = source[i].permute(1, 0)
+            target = target.permute(1, 0)
             optimizer.zero_grad()
             # TODO might need to split source into code, ast, doc
             outputs = model(source, target, teacher_forcing_ratio)
@@ -129,8 +131,8 @@ def test(model, dataloader):
         generations = []
         for idx, (source, target) in enumerate(dataloader):
             for i in range(len(source)):
-                source[i] = source[i].permute(1, 0, 2)
-            target = target.permute(1, 0, 2)
+                source[i] = source[i].permute(1, 0)
+            target = target.permute(1, 0)
             outputs = model(source, target, 0)
             loss = criterion(outputs.view(-1, outputs.shape[-1]), target.view(-1))
             total_loss += loss.item()
@@ -218,8 +220,8 @@ if __name__=="__main__":
     df_train = pd.read_pickle('./dataprocessing/df_train_reduced.pkl').head(1000)
     df_test = pd.read_pickle('./dataprocessing/df_test_reduced.pkl').head(200)
 
-    train_loader = get_data_loader(df_train)
-    test_loader = get_data_loader(df_test) 
+    train_loader = get_data_loader(df_train, test=False)
+    test_loader = get_data_loader(df_test, test=True) 
 
     # TRAIN and EVAL
     train(model, train_loader, args.epoch, args.learning_rate, args.teacher_forcing_ratio)

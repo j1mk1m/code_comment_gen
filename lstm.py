@@ -70,7 +70,7 @@ class Attention(nn.Module):
         # encoder_outputs = (L, B, H * 2)
         batch_size = encoder_outputs.shape[1] # B
         src_length = encoder_outputs.shape[0] # L
-        hidden = hidden.unsqueeze(1).expand(-1, src_length, -1) # (B, L, Ho)
+        hidden = hidden.permute(1,0,2).expand(-1, src_length, -1) # (B, L, Ho)
         encoder_outputs = rearrange(encoder_outputs, "l b h -> b l h") # (B, L, H*2)
         energy = torch.tanh(self.attn(torch.concat((hidden, encoder_outputs), dim=2)))
         # energy = (B, L, Ho) 
@@ -92,14 +92,14 @@ class MultiSeq2Seq(nn.Module):
 
         self.encoder_hidden_dim = sum([encoder.hidden_dim for encoder in self.encoders])
         self.decoder_hidden_dim = self.decoder.hidden_dim
-        self.linear = nn.Linear(self.encoder_hidden_dim, self.decoder_hidden_dim)
+        self.linear = nn.Linear(2*self.encoder_hidden_dim, self.decoder_hidden_dim)
  
     def forward(self, source, comment, teacher_forcing_ratio=0.5):
         # source = list of tensors of shape (L, B, D)
         # e.g. code = (Lc, B, Dc), ast = (La, B, Da), doc = (Ld, B, Dd)
         assert len(source) == len(self.encoders)
 
-        
+
         # comment/output = (Lo, B, _)
         batch_size = source[0].shape[1]
         output_length = comment.shape[0]
@@ -113,7 +113,7 @@ class MultiSeq2Seq(nn.Module):
             encoder = self.encoders[i]
             input = source[i]
             print(input.shape)
-            input = input.permute(1,0,2)
+            # input = input.permute(1,0,2)
             out, (hid, cell) = encoder(input)
             enc_outputs.append(out)
             enc_hidden.append(hid)
@@ -121,6 +121,9 @@ class MultiSeq2Seq(nn.Module):
  
         decoder_hidden, decoder_cell = self.linear(torch.concat(enc_hidden, dim=1)), self.linear(torch.concat(enc_cell, dim=1))
         decoder_input = comment[0,:] # SOS tokens
+        
+        decoder_hidden = decoder_hidden.unsqueeze(0)
+        decoder_cell = decoder_cell.unsqueeze(0)
 
         for t in range(output_length): 
             contexts = []
