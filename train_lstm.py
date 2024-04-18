@@ -2,122 +2,87 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 import torch.nn.functional as F
-from torch.utils.data import Dataset, DataLoader
-from collections import Counter
-import pandas as pd
 
 import argparse
-# import wandb
+import os
+import wandb
 import tqdm
 
 from lstm import *
 from evaluation import *
 from dataset import *
 
-# TODO Template index to token function
-def idx_to_token(index):
-    return None
-
-"""
-- index to token (for comments)
-- token sequence to sentence (for comments)
-"""
-# Dataloader
-TRAIN_BATCH_SIZE = 32
-TEST_BATCH_SIZE = 1
-
 # Code Encoder
 CODE_DIM = 10000
-CODE_ENC_EMBED_DIM = 64
-CODE_ENC_HIDDEN_DIM = 128
-CODE_ENC_DROPOUT = 0.5
+CODE_ENC_EMBED_DIM = 64 
+CODE_ENC_HIDDEN_DIM = 512
+CODE_ENC_DROPOUT = 0.1
 # AST Encoder
 AST_DIM = 64
-AST_ENC_EMBED_DIM = 50
-AST_ENC_HIDDEN_DIM = 128
-AST_ENC_DROPOUT = 0.5
+AST_ENC_EMBED_DIM = 64 
+AST_ENC_HIDDEN_DIM = 256 
+AST_ENC_DROPOUT = 0.1
 # Doc Encoder 
 DOC_DIM = 64
-DOC_ENC_EMBED_DIM = 50
-DOC_ENC_HIDDEN_DIM = 128
-DOC_ENC_DROPOUT = 0.5
+DOC_ENC_EMBED_DIM = 128 
+DOC_ENC_HIDDEN_DIM = 256 
+DOC_ENC_DROPOUT = 0.1
 # Decoder
 OUTPUT_DIM = 10000
-DEC_EMBED_DIM = 64
-DEC_HIDDEN_DIM = 128
+DEC_EMBED_DIM = 64 
+DEC_HIDDEN_DIM = 512 
 DEC_NUM_LAYERS = 1
-DEC_DROPOUT = 0.5
+DEC_DROPOUT = 0.1
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-class CustomDataset(Dataset):
-    def __init__(self, data):
-        self.unknown_token = '<unk>'
-        self.data = data
-        input_encoded, input_vocab, input_rev_vocab = self.get_one_hot(data['processed_func_code_tokens'], 10000)
-        output_encoded, output_vocab, output_rev_vocab = self.get_one_hot(data['processed_doc_tokens'], 10000)
-        self.input_encoded = input_encoded
-        self.output_encoded = output_encoded
-        self.input_vocab = input_vocab
-        self.output_vocab = output_vocab
-        self.input_vocab_rev = input_rev_vocab
-        self.output_vocab_rev = output_rev_vocab
-
-    def get_one_hot(self, series, vocab_size):
-        self.input_data = list(series.apply(lambda x: list(x)))
-        
-        all_words = [word for sentence in series for word in sentence]
-        word_freq = Counter(all_words)
-        
-        most_common_words = word_freq.most_common(vocab_size)
-        
-        vocabulary = {word: idx for idx, (word, _) in enumerate(most_common_words)}
-
-        vocabulary[self.unknown_token] = len(vocabulary)
-        
-        reverse_vocab = {id:word for word,id in vocabulary.items()}
-        return [self.sentence_to_one_hot(sentence, vocabulary) for sentence in series], vocabulary, reverse_vocab
-
-    def sentence_to_one_hot(self, sentence, vocab):
-        indices = [vocab.get(word, vocab[self.unknown_token]) for word in sentence]
-        # return torch.nn.functional.one_hot(torch.tensor(indices).to(torch.int64), num_classes=len(vocab))
-        return torch.tensor(indices)
-    
-    def __len__(self):
-        return len(self.data)
-    
-    def __getitem__(self, idx):
-        return [self.input_encoded[idx]], self.output_encoded[idx]
-    
-def get_data_loader(series, test = False):
-    dataset = CustomDataset(series)
-    return DataLoader(dataset, batch_size=TEST_BATCH_SIZE if test == True else TRAIN_BATCH_SIZE, shuffle=True)
+def init_weights(m):
+    for name, param in m.named_parameters():
+        nn.init.normal_(param.data, mean=0, std=0.1)
 
 def train(model, dataloader, epoch, learning_rate, teacher_forcing_ratio):
+    print("Training...")
+    pad_tok = dataloader.dataset.input_vocab['<pad>']
+    sos_tok = dataloader.dataset.input_vocab['<sos>']
+    eos_tok = dataloader.dataset.input_vocab['<eos>']
+    c_pad_tok = dataloader.dataset.output_vocab['<pad>']
+    c_sos_tok = dataloader.dataset.output_vocab['<sos>']
+    c_eos_tok = dataloader.dataset.output_vocab['<eos>']
+
+    model.train()
     criterion = nn.CrossEntropyLoss()
     optimizer = optim.Adam(model.parameters(), lr=learning_rate)
+    scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=50, gamma=0.5)
     
+    best_loss = None
     for e in tqdm.tqdm(range(epoch)):
-        # Code for training the model goes here
         total_loss = 0
+        losses = []
         for batch_idx, (source, target) in enumerate(dataloader):
-            # Your code to loop through batches in a torch Dataloader goes here
-            for i in range(len(source)):
-                source[i] = source[i].permute(1, 0)
-            target = target.permute(1, 0)
+            # source, target = (B, L) => (L, B)
+            # for i in range(len(source)):
+                # source[i] = source[i].permute(1, 0).to(device)
+            source = source.permute(1, 0).to(device)
+            target = target.permute(1, 0).to(device)
+
             optimizer.zero_grad()
-            # TODO might need to split source into code, ast, doc
-            outputs = model(source, target, teacher_forcing_ratio)
-            # outputs = (Lo, B, Do)
-            outputs = outputs.view(-1, outputs.shape[-1])
-            target = target.view(-1)
+            outputs = model(source, target, teacher_forcing_ratio) # (Lo, B, Do)
+            outputs = outputs[1:].view(-1, outputs.shape[-1]) # ((Lo-1) * B, Do)
+            target = target[1:].reshape(-1) # ((Lo-1) * B)
             loss = criterion(outputs, target)
             loss.backward()
             optimizer.step()
+            scheduler.step()
             total_loss += loss.item()
+            losses.append(loss.item())
+
         avg_loss = total_loss / len(dataloader)
         print(f"Average loss {avg_loss}")
-        # wandb.log({"epoch": e, "loss": avg_loss})
+        wandb.log({"epoch": e, "loss": avg_loss})
+
+        if best_loss is None or avg_loss < best_loss:
+            best_loss = avg_loss
+            torch.save(model.state_dict(), os.path.join("saved_models", f"model_{e}_{learning_rate}_{teacher_forcing_ratio}.pt"))
     
     torch.save(model.state_dict(), f"model_{epoch}_{learning_rate}_{teacher_forcing_ratio}.pt")
 
@@ -130,11 +95,15 @@ def test(model, dataloader):
     with torch.no_grad():
         generations = []
         for idx, (source, target) in enumerate(dataloader):
-            for i in range(len(source)):
-                source[i] = source[i].permute(1, 0)
-            target = target.permute(1, 0)
-            outputs = model(source, target, 0)
-            loss = criterion(outputs.view(-1, outputs.shape[-1]), target.view(-1))
+            # source, target = (B, L) => (L, B)
+            # for i in range(len(source)):
+            #     source[i] = source[i].permute(1, 0)
+            source = source.permute(1, 0).to(device)
+            target = target.permute(1, 0).to(device)
+
+            outputs = model(source, target, 0) # (Lo, B, Do)
+
+            loss = criterion(outputs.view(-1, outputs.shape[-1]), target.reshape(-1))
             total_loss += loss.item()
             
             generated_ids = outputs.argmax(2) # (Lo, B) let B=1
@@ -142,46 +111,52 @@ def test(model, dataloader):
             
             generation = []
             for index in generated_ids:
-                generation.append(idx_to_token(index))
+                generation.append(dataloader.dataset.output_vocab_rev[index])
             generations.append(generation)
 
             targets.append(target.squeeze(1))
         avg_loss = total_loss / len(dataloader)
-        # wandb.log({"test_loss": avg_loss})
+        wandb.log({"test_loss": avg_loss})
+    print(generations)
+    with open("output.txt", 'w') as file:
+        gens = [" ".join(gen) for gen in generations]
+        file.writelines(gens)
     bleu_score = evaluate(generations, targets)
     return generations, bleu_score
     
 if __name__=="__main__":
     parser = argparse.ArgumentParser("Train script for Code Comment Generation")
-    parser.add_argument("--epoch", type=int, default=1000, help="Number of epochs")
+    parser.add_argument("--epoch", type=int, default=200, help="Number of epochs")
     parser.add_argument("--learning_rate", type=float, default=0.1)
     parser.add_argument("--teacher_forcing_ratio", type=float, default=0.5)
     parser.add_argument("--model", type=str, default="base", choices=["base", "AST", "Doc", "Full"], help="Model type to use (base, AST, Doc, Full)")
+    parser.add_argument("--loadpath")
+    parser.add_argument("--datapoints", type=int, default=1000)
     args = parser.parse_args()
 
-    # wandb.init(project="CodeCommentGen", 
-    #     config={
-    #         "learning_rate": args.learning_rate, 
-    #         "epoch": args.epoch, 
-    #         "model": args.model,
-    #         "CODE_DIM": CODE_DIM,
-    #         "CODE_ENC_EMBED_DIM": CODE_ENC_EMBED_DIM,
-    #         "CODE_ENC_HIDDEN_DIM": CODE_ENC_HIDDEN_DIM,
-    #         "CODE_ENC_DROPOUT": CODE_ENC_DROPOUT,
-    #         "AST_DIM": AST_DIM,
-    #         "AST_ENC_EMBED_DIM": AST_ENC_EMBED_DIM,
-    #         "AST_ENC_HIDDEN_DIM": AST_ENC_HIDDEN_DIM,
-    #         "AST_ENC_DROPOUT": AST_ENC_DROPOUT,
-    #         "DOC_DIM": DOC_DIM,
-    #         "DOC_ENC_EMBED_DIM": DOC_ENC_EMBED_DIM,
-    #         "DOC_ENC_HIDDEN_DIM": DOC_ENC_HIDDEN_DIM,
-    #         "DOC_ENC_DROPOUT": DOC_ENC_DROPOUT,
-    #         "OUTPUT_DIM": OUTPUT_DIM,
-    #         "DEC_EMBED_DIM": DEC_EMBED_DIM,
-    #         "DEC_HIDDEN_DIM": DEC_HIDDEN_DIM,
-    #         "DEC_NUM_LAYERS": DEC_NUM_LAYERS,
-    #         "DEC_DROPOUT": DEC_DROPOUT
-    #     })
+    wandb.init(project="CodeCommentGen", 
+        config={
+            "learning_rate": args.learning_rate, 
+            "epoch": args.epoch, 
+            "model": args.model,
+            "CODE_DIM": CODE_DIM,
+            "CODE_ENC_EMBED_DIM": CODE_ENC_EMBED_DIM,
+            "CODE_ENC_HIDDEN_DIM": CODE_ENC_HIDDEN_DIM,
+            "CODE_ENC_DROPOUT": CODE_ENC_DROPOUT,
+            "AST_DIM": AST_DIM,
+            "AST_ENC_EMBED_DIM": AST_ENC_EMBED_DIM,
+            "AST_ENC_HIDDEN_DIM": AST_ENC_HIDDEN_DIM,
+            "AST_ENC_DROPOUT": AST_ENC_DROPOUT,
+            "DOC_DIM": DOC_DIM,
+            "DOC_ENC_EMBED_DIM": DOC_ENC_EMBED_DIM,
+            "DOC_ENC_HIDDEN_DIM": DOC_ENC_HIDDEN_DIM,
+            "DOC_ENC_DROPOUT": DOC_ENC_DROPOUT,
+            "OUTPUT_DIM": OUTPUT_DIM,
+            "DEC_EMBED_DIM": DEC_EMBED_DIM,
+            "DEC_HIDDEN_DIM": DEC_HIDDEN_DIM,
+            "DEC_NUM_LAYERS": DEC_NUM_LAYERS,
+            "DEC_DROPOUT": DEC_DROPOUT
+        })
 
     # MODEL
     encoders = []
@@ -189,8 +164,8 @@ if __name__=="__main__":
     context_dim = CODE_ENC_HIDDEN_DIM
 
     # Code Encoder
-    code_encoder = Encoder(CODE_DIM, CODE_ENC_HIDDEN_DIM, CODE_ENC_EMBED_DIM, dropout=CODE_ENC_DROPOUT)
-    code_attention = Attention(CODE_ENC_HIDDEN_DIM, DEC_HIDDEN_DIM)
+    code_encoder = Encoder(CODE_DIM, CODE_ENC_HIDDEN_DIM, CODE_ENC_EMBED_DIM, dropout=CODE_ENC_DROPOUT).to(device)
+    code_attention = Attention(CODE_ENC_HIDDEN_DIM, DEC_HIDDEN_DIM).to(device)
     encoders.append(code_encoder)
     attentions.append(code_attention)
 
@@ -211,24 +186,38 @@ if __name__=="__main__":
         context_dim += DOC_ENC_HIDDEN_DIM
 
     # Decoder
-    decoder = Decoder(OUTPUT_DIM, DEC_HIDDEN_DIM, DEC_EMBED_DIM, context_dim, DEC_NUM_LAYERS)
+    decoder = Decoder(OUTPUT_DIM, DEC_HIDDEN_DIM, DEC_EMBED_DIM, context_dim * 2, DEC_NUM_LAYERS).to(device)
 
     # MultiSeq2Seq Model
-    model = MultiSeq2Seq(encoders, decoder, attentions, device)
+    model = Seq2Seq(code_encoder, decoder, code_attention, device).to(device)
+    # model = MultiSeq2Seq(encoders, decoder, attentions, device).to(device)
 
-    # DATALOADER
-    df_train = pd.read_pickle('./dataprocessing/df_train_reduced.pkl').head(1000)
-    df_test = pd.read_pickle('./dataprocessing/df_test_reduced.pkl').head(200)
+    if args.loadpath:
+        model.load_state_dict(torch.load(args.loadpath))
+    else: 
+        model.apply(init_weights)
 
-    train_loader = get_data_loader(df_train, test=False)
+    print(model)
+
+    # Train
+    if not args.loadpath:
+        print("Loading training data...")
+        df_train = pd.read_pickle('./data/df_train_reduced.pkl').head(args.datapoints)
+        train_loader = get_data_loader(df_train, test=False)
+        print("Train data loaded")
+
+        train(model, train_loader, args.epoch, args.learning_rate, args.teacher_forcing_ratio)
+
+    # Test
+    print("Loading test data...")
+    df_test = pd.read_pickle('./data/df_test_reduced.pkl')
     test_loader = get_data_loader(df_test, test=True) 
-
-    # TRAIN and EVAL
-    train(model, train_loader, args.epoch, args.learning_rate, args.teacher_forcing_ratio)
+    print("Test data loaded")
+    
     generations, score = test(model, test_loader)
     print(f"BLEU-4 Score: {score}")
-    # wandb.log({"bleu_score": score})
-    # wandb.log({"generations": generations})
+    wandb.log({"bleu_score": score})
+    wandb.log({"generations": generations})
 
     with open("output.txt", 'w') as file:
         gens = [" ".join(gen) for gen in generations]

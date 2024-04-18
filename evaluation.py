@@ -16,3 +16,7 @@ def evaluate(hypothesis, references):
 
     return total_score / len(hypothesis)
 
+if __name__=="__main__":
+    hyp = ["hello, my name is James"]
+    ref = ["this project is cool"]
+    print(evaluate(hyp, ref))
