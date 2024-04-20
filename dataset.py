@@ -39,8 +39,7 @@ class CustomDataset(Dataset):
 
     def sentence_to_one_hot(self, sentence, vocab):
         indices = [vocab.get(word, vocab[self.unknown_token]) for word in sentence]
-        # return torch.nn.functional.one_hot(torch.tensor(indices).to(torch.int64), num_classes=len(vocab))
-        return torch.tensor(indices, dtype=torch.int32)
+        return torch.tensor(indices, dtype=torch.int64)
     
     def __len__(self):
         return len(self.data)
