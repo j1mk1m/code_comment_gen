@@ -179,14 +179,10 @@ class Seq2Seq(nn.Module):
         enc_out, (hid, cell) = self.encoder(source)
  
         decoder_hidden, decoder_cell = self.linear(hid), self.linear(cell)
-        decoder_input = comment[0,:] # <sos> tokens
+        decoder_input = comment[0] # <sos> tokens
         
         for t in range(output_length): 
             _, context = self.attention(decoder_hidden, enc_out)
-            # print("context", context.shape)
-            # print("decoder_hidden", decoder_hidden.shape)
-            # print("decoder_cell", decoder_cell.shape)
-            # print("decoder_input", decoder_input.shape)
 
             decoder_output, (decoder_hidden, decoder_cell) = self.decoder(decoder_input, (decoder_hidden, decoder_cell), context)
             outputs[t] = decoder_output

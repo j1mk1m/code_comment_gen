@@ -13,7 +13,7 @@ from evaluation import *
 from dataset import *
 
 # Code Encoder
-CODE_DIM = 10000
+CODE_DIM = 2000
 CODE_ENC_EMBED_DIM = 64 
 CODE_ENC_HIDDEN_DIM = 512
 CODE_ENC_DROPOUT = 0.1
@@ -28,13 +28,14 @@ DOC_ENC_EMBED_DIM = 128
 DOC_ENC_HIDDEN_DIM = 256 
 DOC_ENC_DROPOUT = 0.1
 # Decoder
-OUTPUT_DIM = 10000
+OUTPUT_DIM = 2000
 DEC_EMBED_DIM = 64 
 DEC_HIDDEN_DIM = 512 
 DEC_NUM_LAYERS = 1
 DEC_DROPOUT = 0.1
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+#device = "cpu"
 
 def init_weights(m):
     for name, param in m.named_parameters():
@@ -42,17 +43,11 @@ def init_weights(m):
 
 def train(model, dataloader, epoch, learning_rate, teacher_forcing_ratio):
     print("Training...")
-    pad_tok = dataloader.dataset.input_vocab['<pad>']
-    sos_tok = dataloader.dataset.input_vocab['<sos>']
-    eos_tok = dataloader.dataset.input_vocab['<eos>']
-    c_pad_tok = dataloader.dataset.output_vocab['<pad>']
-    c_sos_tok = dataloader.dataset.output_vocab['<sos>']
-    c_eos_tok = dataloader.dataset.output_vocab['<eos>']
 
     model.train()
-    criterion = nn.CrossEntropyLoss()
+    criterion = nn.CrossEntropyLoss(reduction='none')
     optimizer = optim.Adam(model.parameters(), lr=learning_rate)
-    scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=50, gamma=0.5)
+    scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=100, gamma=0.5)
     
     best_loss = None
     for e in tqdm.tqdm(range(epoch)):
@@ -60,21 +55,41 @@ def train(model, dataloader, epoch, learning_rate, teacher_forcing_ratio):
         losses = []
         for batch_idx, (source, target) in enumerate(dataloader):
             # source, target = (B, L) => (L, B)
+            batch_size = target.shape[0]
             # for i in range(len(source)):
                 # source[i] = source[i].permute(1, 0).to(device)
             source = source.permute(1, 0).to(device)
             target = target.permute(1, 0).to(device)
+            target = torch.concat((target[1:], torch.zeros((1, batch_size), dtype=target.dtype, device=device)), dim=0)
 
             optimizer.zero_grad()
             outputs = model(source, target, teacher_forcing_ratio) # (Lo, B, Do)
-            outputs = outputs[1:].view(-1, outputs.shape[-1]) # ((Lo-1) * B, Do)
-            target = target[1:].reshape(-1) # ((Lo-1) * B)
-            loss = criterion(outputs, target)
+            outputs_flat = outputs.view(-1, outputs.shape[-1]) # (Lo * B, Do)
+            target_flat = target.reshape(-1) # (Lo * B)
+            loss = criterion(outputs_flat, target_flat)
+            # zero out losses for padding
+            loss = loss.masked_fill(target_flat == torch.zeros_like(target_flat), 0)
+            loss = torch.mean(loss)
             loss.backward()
+            torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
             optimizer.step()
             scheduler.step()
             total_loss += loss.item()
             losses.append(loss.item())
+
+            if e % 100 == 99 and batch_idx == 0:
+                pred = outputs.permute(1, 0, 2).argmax(2)
+                trg = target[1:].permute(1, 0)
+                for i in range(2):
+                    indices = pred[i]
+                    words = [dataloader.dataset.output_vocab_rev[p.item()] for p in pred[i]]
+                    print("Prediction")
+                    print(indices)
+                    print(words)
+                    print("Target")
+                    print(trg[i])
+                    print([dataloader.dataset.output_vocab_rev[p.item()] for p in trg[i]])
+
 
         avg_loss = total_loss / len(dataloader)
         print(f"Average loss {avg_loss}")
@@ -103,24 +118,29 @@ def test(model, dataloader):
 
             outputs = model(source, target, 0) # (Lo, B, Do)
 
-            loss = criterion(outputs.view(-1, outputs.shape[-1]), target.reshape(-1))
+            outputs_flat = outputs.view(-1, outputs.shape[-1]) # (Lo * B, Do)
+            target_flat = torch.concat((target[1:], torch.zeros((1, 1), dtype=target.dtype, device=device)), dim=0).reshape(-1) # (Lo * B)
+            loss = criterion(outputs_flat, target_flat)
+            loss = loss.masked_fill(target_flat == torch.zeros_like(target_flat), 0)
+            loss = torch.mean(loss)
             total_loss += loss.item()
             
-            generated_ids = outputs.argmax(2) # (Lo, B) let B=1
-            generated_ids = generated_ids.squeeze(1) # (Lo,)
-            
-            generation = []
-            for index in generated_ids:
-                generation.append(dataloader.dataset.output_vocab_rev[index])
-            generations.append(generation)
+            pred = outputs.permute(1, 0, 2).argmax(2)
+            trg = target[1:].permute(1, 0)
+            words = [dataloader.dataset.output_vocab_rev[p.item()] for p in pred[0]]
+            generations.append(" ".join(words))
+            print("Prediction")
+            print(words)
+            words = [dataloader.dataset.output_vocab_rev[p.item()] for p in trg[0]]
+            print("Target")
+            print(words) 
+            targets.append(" ".join(words))
 
-            targets.append(target.squeeze(1))
         avg_loss = total_loss / len(dataloader)
         wandb.log({"test_loss": avg_loss})
-    print(generations)
+
     with open("output.txt", 'w') as file:
-        gens = [" ".join(gen) for gen in generations]
-        file.writelines(gens)
+        file.writelines(generations)
     bleu_score = evaluate(generations, targets)
     return generations, bleu_score
     
@@ -202,7 +222,7 @@ if __name__=="__main__":
     # Train
     if not args.loadpath:
         print("Loading training data...")
-        df_train = pd.read_pickle('./data/df_train_reduced.pkl').head(args.datapoints)
+        df_train = pd.read_pickle('./data/df_test_reduced.pkl').head(args.datapoints)
         train_loader = get_data_loader(df_train, test=False)
         print("Train data loaded")
 
@@ -210,7 +230,7 @@ if __name__=="__main__":
 
     # Test
     print("Loading test data...")
-    df_test = pd.read_pickle('./data/df_test_reduced.pkl')
+    df_test = pd.read_pickle('./data/df_test_reduced.pkl').head(50)
     test_loader = get_data_loader(df_test, test=True) 
     print("Test data loaded")
     

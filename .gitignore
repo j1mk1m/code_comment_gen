@@ -1,6 +1,4 @@
-./project/pickles
-./project/tokenizers
-./data/*
+data
 james.pem
 sync_ec2.sh
 install.sh

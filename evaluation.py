@@ -1,22 +1,24 @@
-import nltk 
-from nltk.translate import bleu
-from nltk.translate.bleu_score import SmoothingFunction
+from nltk.translate.bleu_score import sentence_bleu, SmoothingFunction
 
 EPSILON = 0.1
 ALPHA = 5
 K = 5
 
-def evaluate(hypothesis, references):
+def evaluate(hypothesis, reference, method):
     sf = SmoothingFunction(EPSILON, ALPHA, K)
-    total_score = 0
-    for i in range(len(hypothesis)):
-        hyp, ref = hypothesis[i], references[i]
-        score = bleu([hyp], [ref], smoothing_function=sf.method4)
-        total_score += score
-
-    return total_score / len(hypothesis)
+    if method == 1:
+        func = sf.method1
+    elif method == 2:
+        func = sf.method2
+    elif method == 3:
+        func = sf.method3
+    elif method == 4:
+        func = sf.method4
+    score = sentence_bleu([reference], hypothesis, smoothing_function=func)
+    return score
 
 if __name__=="__main__":
-    hyp = ["hello, my name is James"]
-    ref = ["this project is cool"]
-    print(evaluate(hyp, ref))
+    reference = 'it is a dog'.split()
+
+    candidate = 'it is a dog'.split()
+    print('BLEU score -> {}'.format(evaluate(candidate, reference, 2)))
