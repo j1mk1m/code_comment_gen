@@ -14,7 +14,7 @@ class Encoder(nn.Module):
         self.input_dim = input_dim # D
         self.embed_dim = embed_dim # E
         self.hidden_dim = hidden_dim # H
-        self.num_layers = 6 # num_layers
+        self.num_layers = num_layers # num_layers
 
         self.embedding = nn.Embedding(input_dim, self.embed_dim) 
         self.lstm = nn.LSTM(self.embed_dim, self.hidden_dim, num_layers=self.num_layers, bidirectional=True)
@@ -47,7 +47,6 @@ class Decoder(nn.Module):
         self.lstm = nn.LSTM(self.context_dim + self.embed_dim, self.hidden_dim)
         self.out = nn.Linear(self.context_dim + self.embed_dim + self.hidden_dim, output_dim)
         self.dropout = nn.Dropout(dropout, inplace=True)
-        self.softmax = nn.Softmax(dim=1)
       
     def forward(self, x, hidden, context):
         # print("Decoder forward")
@@ -71,7 +70,8 @@ class Attention(nn.Module):
     def __init__(self, enc_hidden_dim, dec_hidden_dim):
         super().__init__()
         self.attn = nn.Linear((enc_hidden_dim * 2) + dec_hidden_dim, dec_hidden_dim)
-        self.out = nn.Linear(dec_hidden_dim, 1) 
+        self.out = nn.Linear(dec_hidden_dim, 1)
+        self.tanh = nn.Tanh()
 
     def forward(self, hidden, encoder_outputs):
         # hidden = (1, B, Ho)
@@ -89,7 +89,7 @@ class Attention(nn.Module):
         # energy = (B, L, Ho) 
         # print("energy", energy.shape)
         attention = self.out(energy)[:,:,0]
-        alpha = torch.softmax(attention, dim=1)
+        alpha = F.softmax(attention, dim=1)
         # alpha = (B, L)
         # print("alpha", alpha.shape)
         context = alpha.unsqueeze(1) @ encoder_outputs
@@ -100,22 +100,20 @@ class Attention(nn.Module):
 class MultiSeq2Seq(nn.Module):
     def __init__(self, encoders, decoder, attentions, device):
         super().__init__() 
-        assert len(encoders) == len(attentions)
         self.encoders = encoders
-        self.decoder = decoder
         self.attentions = attentions
+        self.decoder = decoder
         self.device = device
 
-        self.encoder_hidden_dim = sum([encoder.hidden_dim for encoder in self.encoders])
+        self.encoder_hidden_dim = 2 * sum([enc.hidden_dim for enc in self.encoders]) 
         self.decoder_hidden_dim = self.decoder.hidden_dim
-        self.linear = nn.Linear(2*self.encoder_hidden_dim, self.decoder_hidden_dim)
+        self.linear = nn.Linear(self.encoder_hidden_dim, self.decoder_hidden_dim)
  
     def forward(self, source, comment, teacher_forcing_ratio=1):
         # source = list of tensors of shape (L, B, D)
         # e.g. code = (Lc, B, Dc), ast = (La, B, Da), doc = (Ld, B, Dd)
-        assert len(source) == len(self.encoders)
-
         # comment/output = (Lo, B, _)
+        assert len(source) == len(self.encoders)
         batch_size = source[0].shape[1]
         output_length = comment.shape[0]
         output_dim = self.decoder.output_dim
@@ -125,27 +123,20 @@ class MultiSeq2Seq(nn.Module):
 
         enc_outputs, enc_hidden, enc_cell = [], [], []
         for i in range(len(self.encoders)):
-            encoder = self.encoders[i]
-            input = source[i]
-            out, (hid, cell) = encoder(input)
+            out, (hid, cell) = self.encoders[i](source[i])
             enc_outputs.append(out)
             enc_hidden.append(hid)
-            enc_cell.append(cell)
- 
+            enc_cell.append(cell) 
+
         decoder_hidden, decoder_cell = self.linear(torch.concat(enc_hidden, dim=2)), self.linear(torch.concat(enc_cell, dim=2))
         decoder_input = comment[0,:] # <sos> tokens
         
-        for t in range(output_length): 
+        for t in range(output_length):
             contexts = []
             for i in range(len(self.encoders)):
-                enc_out = enc_outputs[i]
-                _, context = self.attentions[i](decoder_hidden, enc_out)
+                _, context = self.attentions[i](decoder_hidden, enc_outputs[i])
                 contexts.append(context)
             context = torch.concat(contexts, dim=2)
-            # print("context", context.shape)
-            # print("decoder_hidden", decoder_hidden.shape)
-            # print("decoder_cell", decoder_cell.shape)
-            # print("decoder_input", decoder_input.shape)
 
             decoder_output, (decoder_hidden, decoder_cell) = self.decoder(decoder_input, (decoder_hidden, decoder_cell), context)
             outputs[t] = decoder_output
@@ -169,6 +160,7 @@ class Seq2Seq(nn.Module):
     def forward(self, source, comment, teacher_forcing_ratio=1):
         # source = (L, B, D)
         # comment/output = (Lo, B)
+        source = source[0]
         batch_size = source.shape[1]
         output_length = comment.shape[0]
         output_dim = self.decoder.output_dim

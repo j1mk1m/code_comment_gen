@@ -1,0 +1,128 @@
+Extracts video ID from URL . <eos>
+str - > list Convert XML URL List List Biligrab Biligrab Biligrab Biligrab Biligrab
+From http : // cdn37 . atwikiimg . / / / / / / / / / / / / / / / / / / / / / / / / / / /
+wrapper <eos>
+Downloads Dailymotion videos by URL . <eos>
+http : // stackoverflow . com / / / / / / /
+video page <eos>
+course page <eos>
+Downloads a Sina video by its unique unique vid . . . . . . . . . . . .
+Downloads a Sina video by its unique unique . / / / / / / / / / /
+Downloads Sina videos by URL . <eos>
+wrapper <eos>
+Get item_id <eos>
+Source : Android mobile <eos>
+self str - > None Keyword arguments : the the the the the the the the the the the the the the the the the the the the the the the the the the the the the the the the the the the the the the the the the the the the the the the the the the
+Extracts video ID from live . com com com com com
+Format text with color or other effects into ANSI string string string string
+Print a log message to standard error . <eos>
+Print an error log message . <eos>
+What a Terrible Failure! <eos>
+Detect operating system . <eos>
+Source : Android mobile <eos>
+str - > None <eos>
+str / int - > None <eos>
+try : # normal Vimeo video html = get_content get_content ( ( ( ( ( ( ( ( ( ( ( ( ( ( ( ( ( ( ( ( ( ( ( ( ( ( ( ( ( ( ( ( ( ( ( ( ( ( ( ( ( ( ( ( ( ( ( ( ( ( ( ( ( ( ( ( ( ( ( ( ( ( ( ( ( ( ( ( ( ( ( ( ( ( ( ( ( ( ( ( ( ( ( ( ( ( ( ( (
+str - > dict Information for CKPlayer API <eos> . <eos>
+Splicing URLs according to video ID to to video <eos> <eos>
+Extracts video ID from URL . <eos>
+str - > list of str Give you the the the real <eos>
+Get ( branch commit ) from HEAD of a a git git git
+Converts a string to a valid filename <eos> <eos>
+Get ( width height ) of the the terminal <eos> <eos>
+Downloads CBS videos by URL . <eos>
+Override the original one Ugly ugly dirty hack hack
+str str str bool bool - > <eos> >
+Main entry point . you - get - - <eos>
+str str - > True WARNING : with with with with with with with with with with with with with with with with with with with with with with
+Scans through a string for substrings matched ( ( ( patterns patterns patterns patterns patterns patterns patterns
+Scans through a string for substrings matched some some patterns patterns
+Parses the query string of a a returns returns returns returns returns returns value value value
+Decompresses data for Content - Encoding : gzip gzip gzip
+Decompresses data for Content - Encoding : : . . . . . . . . . .
+Gets the content of a URL via sending sending sending sending sending sending sending
+Post the content of a URL via sending sending sending sending sending sending sending
+Parses host name and port number from string string string string
+Overload default print function as py ( <3 . it it it it it it it it it it it it it it it it it it it it it it it it it it it it it it it it it it it it it it it it it it it
+str - > str <eos>
+Source : Android mobile <eos>
+JSON int int int - > str Get proper proper proper proper proper with with with + + +
+int - > None Download a WHOLE WHOLE the . . . . . . . . .
+int int int - > None Download ONE ONE PART PART PART PART <eos>
+int int - > list Get the height the the the the the the the the the the the the the the the the the the the the the the the the the the the the the the the the the the the the the the the the the the the the the the the the the
+Checks if a task is either queued running or running or running or
+Returns and flush the event buffer it it it it it it it it it it it it it it it it it it it it it it it it it
+one method to fetch connection params () () () () () () () () () () ()
+override DbApiHook get_uri method for get_sqlalchemy_engine () <eos>
+Returns a snowflake . connection object <eos>
+returns aws_access_key_id aws_secret_access_key from extra <eos>
+Fetches a field from extras and returns it . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . .
+Executes SQL using psycopg2 copy_expert method . to to to to to to to to to to to to
+Loads a tab - delimited file into table <eos> table <eos>
+Dumps a database table into a tab delimited - <eos> <eos>
+Uploads the file to Google cloud storage <eos>
+Gets the max partition for a table . <eos>
+This function finds the date in a list closest closest closest closest closest closest closest closest the the the . . . . . . . . . .
+This function finds the date in a list closest closest closest closest closest closest closest closest closest . . . . . . . . . . . .
+Returns a mysql connection object <eos>
+Loads a tab - delimited file into table <eos> table <eos>
+Checks whether new objects have been uploaded the the the the the the the the the the the the the the the
+Helps debug deadlocks by printing stacktraces stacktraces when > > > > > > \ > \ > \ . \ . \ . \ .
+Creates a dag run for the specified dag : : : : : : : :
+Deletes all DB records related to the specified dag : : : : : : : :
+Returns the unmet dependencies for a a instance the the the the the the the the the the the the the the the the the the the the the the the the the the the the the the the the the the the the the the the the the the the the the the the the the the the the the the the the the instance the instance the instance instance instance instance instance instance instance instance : : : : : : : : : : : : : : : : : : :
+Returns the state of a TaskInstance at line line line line line - - - - - - - - - - -
+Returns the state of a DagRun at line line line line line - - - : : : : : : : : : : : : :
+Returns the next execution datetime of a DAG at line line line line line - - : : : : : : : : : : : :
+Runs forever monitoring the child processes of <eos>
+Retrieves connection to Cloud Translate <eos>
+Translate a string or list of strings . <eos>
+Execute the bash command in a temporary directory which which cleaned cleaned cleaned afterwards
+Retrieves a resource containing information about Cloud Cloud SQL SQL instance <eos>
+Creates a new Cloud SQL instance . <eos>
+Updates settings of a Cloud SQL instance instance <eos>
+Deletes a Cloud SQL instance . <eos>
+Retrieves a database resource from a Cloud SQL instance <eos> <eos>
+Creates a new database inside a Cloud SQL instance <eos> <eos>
+Updates a database resource inside a Cloud SQL instance <eos> <eos>
+Deletes a database from a Cloud SQL SQL instance <eos>
+Exports data from a Cloud SQL instance a a a a a a a a a a a a a a
+Waits for the named operation to complete checks checks checks the the the the the the
+Starts Cloud SQL Proxy . <eos>
+Stops running proxy . <eos>
+Returns version of the Cloud SQL Proxy . <eos>
+Create connection in the Connection table according according whether whether whether ID it it it . . . . . . . . . .
+Retrieves the dynamically created connection from the Connection table table table
+Delete the dynamically created connection from the Connection table table <eos>
+Retrieve Cloud SQL Proxy runner . the the the the the the the the the the the the
+Retrieve database hook . This is the the the the the the the the the the the the the the the the the the the the the
+Clean up database hook after it was used <eos> used
+Reserve free TCP port to to used <eos> <eos> <eos> <eos> <eos>
+Replaces invalid MLEngine job_id characters with _ <eos> <eos>
+Extract error code from ftp exception <eos>
+Integrate plugins to the context <eos>
+Remove any existing DAG runs for the perf test DAGs DAGs DAGs
+Remove any existing task instances for the perf test DAGs <eos> <eos>
+Toggle the pause state of the DAGs in the the <eos> <eos>
+Print operational metrics for the scheduler test <eos> <eos>
+Override the scheduler heartbeat to determine when the the the <eos> <eos>
+Invoke Lambda Function <eos>
+Return the task object identified by the the given <eos> <eos> <eos> <eos>
+Creates Operators needed for model evaluation and returns . <eos>
+Creates the directory specified by path creating intermediate directories directory directory directory . . . . . . . . . . . .
+A small helper function to convert a a if string string string string string string
+Get the current date and time in UTC : : : :
+Gets the epoch in the users timezone : return return return
+Returns the datetime with the default timezone added added added added if : : : : : : : : : : : : : :
+Make a naive datetime . datetime in a a time time time <eos> <eos>
+Make an aware datetime . datetime naive in a a time time <eos> <eos>
+Wrapper around datetime . datetime that adds settings . if if if if if if
+Sets the environment variable GOOGLE_APPLICATION_CREDENTIALS with either : <eos>
+Fetches a field from extras and returns it . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . .
+Establish a connection to druid broker <eos> <eos>
+Returns http session for use with requests <eos>
+Performs the request <eos>
+Checks the status code and raise an AirflowException exception status status status status status status status status
+Grabs extra options like timeout and actually runs the the the the the the the
+Runs Hook . run () with a decorator decorator decorator decorator attached attached attached attached attached intermittent fail intermittent fail intermittent fail intermittent fail intermittent fail intermittent fail intermittent fail intermittent fail
+Contextmanager that will create and teardown a session . <eos>

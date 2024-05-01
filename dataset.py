@@ -5,39 +5,49 @@ import pandas as pd
 from collections import Counter
 
 # Dataloader
-TRAIN_BATCH_SIZE = 8
+TRAIN_BATCH_SIZE = 16
 TEST_BATCH_SIZE = 1
 
+# 2346, 1166
+def get_vocabs(data, cv_size, av_size, dv_size, ov_size):
+    input_vocab, input_rev_vocab = create_vocab(data['processed_func_code_tokens'], cv_size)
+    ast_vocab, ast_rev_vocab = create_vocab(data['processed_ast_code_tokens'], av_size)
+    doc_vocab, doc_rev_vocab = create_vocab(data['processed_doc_tokens'], dv_size)
+    output_vocab, output_rev_vocab = create_vocab(data['processed_doc_tokens'], ov_size)
+    return input_vocab, input_rev_vocab, ast_vocab, ast_rev_vocab, doc_vocab, doc_rev_vocab, output_vocab, output_rev_vocab
+
+def create_vocab(data, vocab_size):
+    unknown_token = '<unk>'        
+    all_words = [word for sentence in data for word in sentence]
+    word_freq = Counter(all_words)
+    
+    most_common_words = word_freq.most_common(vocab_size-1)
+    
+    vocabulary = {word: idx for idx, (word, _) in enumerate(most_common_words)}
+
+    vocabulary[unknown_token] = len(vocabulary)
+    
+    reverse_vocab = {id:word for word,id in vocabulary.items()}
+    for i in range(len(reverse_vocab), vocab_size):
+        reverse_vocab[i] = unknown_token
+
+    return vocabulary, reverse_vocab
+
+
 class CustomDataset(Dataset):
-    def __init__(self, data):
+    def __init__(self, data, cvocab, avocab, dvocab, ovocab, mode):
         self.unknown_token = '<unk>'
         self.data = data
-        input_encoded, input_vocab, input_rev_vocab = self.get_one_hot(data['processed_func_code_tokens'], 10000)
-        output_encoded, output_vocab, output_rev_vocab = self.get_one_hot(data['processed_doc_tokens'], 10000)
-        self.input_encoded = input_encoded
-        self.output_encoded = output_encoded
-        self.input_vocab = input_vocab
-        self.output_vocab = output_vocab
-        self.input_vocab_rev = input_rev_vocab
-        self.output_vocab_rev = output_rev_vocab
+        self.input_encoded = self.parse(data["processed_func_code_tokens"], cvocab)
+        self.ast_encoded = self.parse(data["processed_ast_code_tokens"], avocab)
+        self.doc_encoded = self.parse(data["processed_doc_tokens"], dvocab)
+        self.output_encoded = self.parse(data["processed_doc_tokens"], ovocab)
+        self.mode = mode
 
-    def get_one_hot(self, series, vocab_size):
-        self.input_data = list(series.apply(lambda x: list(x)))
-        
-        all_words = [word for sentence in series for word in sentence]
-        word_freq = Counter(all_words)
-        
-        most_common_words = word_freq.most_common(vocab_size)
-        
-        vocabulary = {word: idx for idx, (word, _) in enumerate(most_common_words)}
+    def parse(self, data, vocab):
+        return [self.token_to_index(sentence, vocab) for sentence in data]
 
-        vocabulary[self.unknown_token] = len(vocabulary)
-        
-        reverse_vocab = {id:word for word,id in vocabulary.items()}
-
-        return [self.sentence_to_one_hot(sentence, vocabulary) for sentence in series], vocabulary, reverse_vocab
-
-    def sentence_to_one_hot(self, sentence, vocab):
+    def token_to_index(self, sentence, vocab):
         indices = [vocab.get(word, vocab[self.unknown_token]) for word in sentence]
         return torch.tensor(indices, dtype=torch.int64)
     
@@ -45,11 +55,18 @@ class CustomDataset(Dataset):
         return len(self.data)
     
     def __getitem__(self, idx):
-        return self.input_encoded[idx], self.output_encoded[idx]
+        inputs = []
+        inputs.append(self.input_encoded[idx])
+        if self.mode == 'Full' or self.mode == 'AST':
+            inputs.append(self.ast_encoded[idx])
+        if self.mode == 'Full' or self.mode == 'Doc':
+            inputs.append(self.doc_encoded[idx])
+        
+        return inputs, self.output_encoded[idx]
     
-def get_data_loader(series, test = False):
-    dataset = CustomDataset(series)
-    return DataLoader(dataset, batch_size=TEST_BATCH_SIZE if test == True else TRAIN_BATCH_SIZE, shuffle=False)
+def get_data_loader(series, cvocab, avocab, dvocab, ovocab, batch_size, mode):
+    dataset = CustomDataset(series, cvocab, avocab, dvocab, ovocab, mode)
+    return DataLoader(dataset, batch_size, shuffle=False)
 
 if __name__=="__main__":
     df_train = pd.read_pickle('./data/df_train_reduced.pkl').head(1000)
