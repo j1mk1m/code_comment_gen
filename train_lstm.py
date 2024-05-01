@@ -14,7 +14,7 @@ from evaluation import *
 from dataset import *
 
 # Data
-TRAIN_BATCH_SIZE = 16
+TRAIN_BATCH_SIZE = 32
 TEST_BATCH_SIZE = 1
 # Code Encoder
 CODE_DIM = 2048
@@ -59,7 +59,7 @@ def train(model, dataloader, ovocab_rev, epoch, learning_rate, teacher_forcing_r
     for e in tqdm.tqdm(range(resume, epoch), desc='Epoch'):
         total_loss = 0
         losses = []
-        for batch_idx, (source, target) in enumerate(dataloader):
+        for batch_idx, (source, target) in tqdm.tqdm(enumerate(dataloader), desc='Batch'):
             # source, target = (B, L) => (L, B)
             batch_size = target.shape[0]
             for i in range(len(source)):
@@ -91,7 +91,7 @@ def train(model, dataloader, ovocab_rev, epoch, learning_rate, teacher_forcing_r
                     t_words = [ovocab_rev[p.item()] for p in trg[i]]
                     try:
                         index = t_words.index("<pad>")
-                    except Exception as e:
+                    except Exception as exc:
                         index = len(t_words)
                     gens.append(p_words[:index])
                     targets.append([t_words[:index]])
@@ -206,11 +206,13 @@ if __name__=="__main__":
 
     # Train
     print("Loading data...")
-    df_all = pd.read_pickle('./data/df_test_doc_strings.pkl').head(args.train_datapoints + args.test_datapoints)
-    df_train = df_all.head(args.train_datapoints)
-    df_test = df_all.iloc[args.train_datapoints:args.train_datapoints + args.test_datapoints]
+    df_train = pd.read_pickle('./df_val_doc_strings.pkl').sample(n=500)
+    df_test = pd.read_pickle('./df_test_doc_strings.pkl')
+    df_all = pd.concat([df_train, df_test])
+    # df_train = df_all.head(args.train_datapoints)
+    # df_test = df_all.iloc[args.train_datapoints:args.train_datapoints + args.test_datapoints]
 
-    cvocab, cvocab_rev, avocab, avocab_rev, dvocab, dvocab_rev, ovocab, ovocab_rev = get_vocabs(df_train, CODE_DIM, AST_DIM, DOC_DIM, OUTPUT_DIM)
+    cvocab, cvocab_rev, avocab, avocab_rev, dvocab, dvocab_rev, ovocab, ovocab_rev = get_vocabs(df_all, CODE_DIM, AST_DIM, DOC_DIM, OUTPUT_DIM)
     train_loader = get_data_loader(df_train, cvocab, avocab, dvocab, ovocab, TRAIN_BATCH_SIZE, args.model)
     test_loader = get_data_loader(df_test, cvocab, avocab, dvocab, ovocab, TEST_BATCH_SIZE, args.model) 
     print("Data loaded")

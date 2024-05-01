@@ -75,8 +75,6 @@ class Transformer(nn.Module):
         self.linear_out = nn.Linear(dk, n_embed)
 
     def forward(self, input, output):
-        print("HI")
-        print(torch.max(input))
         encode_input = self.encoder(input)
         decode_input = self.decoder(output)
 
