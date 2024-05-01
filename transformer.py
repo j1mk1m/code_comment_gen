@@ -75,14 +75,19 @@ class Transformer(nn.Module):
         self.linear_out = nn.Linear(dk, n_embed)
 
     def forward(self, input, output):
-        encode_input = self.pos_embed(self.encoder(input))
-        decode_output = self.pos_embed(self.decoder(output))
+        print("HI")
+        print(torch.max(input))
+        encode_input = self.encoder(input)
+        decode_input = self.decoder(output)
+
+        pos_encode_input = self.pos_embed(encode_input)
+        pos_decode_output = self.pos_embed(decode_input)
 
         _, input_len = input.size()
         _, output_len = output.size()
         input_mask = self.encode_masker.get_mask(input_len)
         output_mask = self.decode_masker.get_mask(output_len)
-        transform_out = self.transformer(encode_input, decode_output, input_mask, output_mask)
+        transform_out = self.transformer(pos_encode_input, pos_decode_output, input_mask, output_mask)
         return self.linear_out(transform_out)
 
 
