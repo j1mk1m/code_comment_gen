@@ -1,4 +1,4 @@
-from nltk.translate.bleu_score import sentence_bleu, SmoothingFunction
+from nltk.translate.bleu_score import sentence_bleu, SmoothingFunction, corpus_bleu
 
 EPSILON = 0.1
 ALPHA = 5
@@ -14,11 +14,15 @@ def evaluate(hypothesis, reference, method):
         func = sf.method3
     elif method == 4:
         func = sf.method4
-    score = sentence_bleu([reference], hypothesis, smoothing_function=func)
+    score = corpus_bleu(reference, hypothesis, smoothing_function=func)
     return score
 
 if __name__=="__main__":
-    reference = 'it is a dog'.split()
+    reference = ['it is a dog'.split(),
+                    'that is a dog'.split(),
+                    'that dog is it a that dog'.split()]
 
-    candidate = 'it is a dog'.split()
+    candidate = ['it is a dog'.split(), 
+                 'not a hotdog'.split(),
+                 'this makes no sense'.split()]
     print('BLEU score -> {}'.format(evaluate(candidate, reference, 2)))

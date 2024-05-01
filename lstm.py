@@ -14,7 +14,7 @@ class Encoder(nn.Module):
         self.input_dim = input_dim # D
         self.embed_dim = embed_dim # E
         self.hidden_dim = hidden_dim # H
-        self.num_layers = num_layers # num_layers
+        self.num_layers = 6 # num_layers
 
         self.embedding = nn.Embedding(input_dim, self.embed_dim) 
         self.lstm = nn.LSTM(self.embed_dim, self.hidden_dim, num_layers=self.num_layers, bidirectional=True)
@@ -60,7 +60,7 @@ class Decoder(nn.Module):
         out, (hidden, cell) = self.lstm(torch.cat((embedded, context), dim=2), hidden)
         # out = (1, B, H_dec)
         out, context, embedded = out[0], context[0], embedded[0]
-        prediction = self.softmax(self.out(torch.concat((embedded, context, out), dim=1)))
+        prediction = self.out(torch.concat((embedded, context, out), dim=1))
         # prediction = (B, D_out), hidden = (B, H_dec)
         # print("prediction", prediction.shape)
         # print("hidden", hidden.shape)
@@ -181,7 +181,7 @@ class Seq2Seq(nn.Module):
         decoder_hidden, decoder_cell = self.linear(hid), self.linear(cell)
         decoder_input = comment[0] # <sos> tokens
         
-        for t in range(output_length): 
+        for t in range(1, output_length): 
             _, context = self.attention(decoder_hidden, enc_out)
 
             decoder_output, (decoder_hidden, decoder_cell) = self.decoder(decoder_input, (decoder_hidden, decoder_cell), context)

@@ -5,7 +5,7 @@ import pandas as pd
 from collections import Counter
 
 # Dataloader
-TRAIN_BATCH_SIZE = 32
+TRAIN_BATCH_SIZE = 8
 TEST_BATCH_SIZE = 1
 
 class CustomDataset(Dataset):
@@ -49,7 +49,7 @@ class CustomDataset(Dataset):
     
 def get_data_loader(series, test = False):
     dataset = CustomDataset(series)
-    return DataLoader(dataset, batch_size=TEST_BATCH_SIZE if test == True else TRAIN_BATCH_SIZE, shuffle=True)
+    return DataLoader(dataset, batch_size=TEST_BATCH_SIZE if test == True else TRAIN_BATCH_SIZE, shuffle=False)
 
 if __name__=="__main__":
     df_train = pd.read_pickle('./data/df_train_reduced.pkl').head(1000)

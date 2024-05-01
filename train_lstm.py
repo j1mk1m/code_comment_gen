@@ -7,6 +7,7 @@ import argparse
 import os
 import wandb
 import tqdm
+from datetime import datetime
 
 from lstm import *
 from evaluation import *
@@ -14,8 +15,8 @@ from dataset import *
 
 # Code Encoder
 CODE_DIM = 2000
-CODE_ENC_EMBED_DIM = 64 
-CODE_ENC_HIDDEN_DIM = 512
+CODE_ENC_EMBED_DIM = 128
+CODE_ENC_HIDDEN_DIM = 1024
 CODE_ENC_DROPOUT = 0.1
 # AST Encoder
 AST_DIM = 64
@@ -29,8 +30,8 @@ DOC_ENC_HIDDEN_DIM = 256
 DOC_ENC_DROPOUT = 0.1
 # Decoder
 OUTPUT_DIM = 2000
-DEC_EMBED_DIM = 64 
-DEC_HIDDEN_DIM = 512 
+DEC_EMBED_DIM = 128
+DEC_HIDDEN_DIM = 1024
 DEC_NUM_LAYERS = 1
 DEC_DROPOUT = 0.1
 
@@ -41,16 +42,18 @@ def init_weights(m):
     for name, param in m.named_parameters():
         nn.init.normal_(param.data, mean=0, std=0.1)
 
-def train(model, dataloader, epoch, learning_rate, teacher_forcing_ratio):
+def train(model, dataloader, epoch, learning_rate, teacher_forcing_ratio, resume=0):
     print("Training...")
 
     model.train()
     criterion = nn.CrossEntropyLoss(reduction='none')
     optimizer = optim.Adam(model.parameters(), lr=learning_rate)
-    scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=100, gamma=0.5)
+    scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=200, gamma=0.5)
+
+    time_id = datetime.now().strftime("%Y_%m_%d_%H_%M")
     
     best_loss = None
-    for e in tqdm.tqdm(range(epoch)):
+    for e in tqdm.tqdm(range(resume, epoch)):
         total_loss = 0
         losses = []
         for batch_idx, (source, target) in enumerate(dataloader):
@@ -60,12 +63,11 @@ def train(model, dataloader, epoch, learning_rate, teacher_forcing_ratio):
                 # source[i] = source[i].permute(1, 0).to(device)
             source = source.permute(1, 0).to(device)
             target = target.permute(1, 0).to(device)
-            target = torch.concat((target[1:], torch.zeros((1, batch_size), dtype=target.dtype, device=device)), dim=0)
 
             optimizer.zero_grad()
             outputs = model(source, target, teacher_forcing_ratio) # (Lo, B, Do)
-            outputs_flat = outputs.view(-1, outputs.shape[-1]) # (Lo * B, Do)
-            target_flat = target.reshape(-1) # (Lo * B)
+            outputs_flat = outputs[1:,:,:].view(-1, outputs.shape[-1]) # (Lo * B, Do)
+            target_flat = target[1:,:].reshape(-1) # (Lo * B)
             loss = criterion(outputs_flat, target_flat)
             # zero out losses for padding
             loss = loss.masked_fill(target_flat == torch.zeros_like(target_flat), 0)
@@ -77,30 +79,42 @@ def train(model, dataloader, epoch, learning_rate, teacher_forcing_ratio):
             total_loss += loss.item()
             losses.append(loss.item())
 
-            if e % 100 == 99 and batch_idx == 0:
-                pred = outputs.permute(1, 0, 2).argmax(2)
+            if e > 0 and e % (epoch // 10) == 0 and batch_idx == 0:
+                pred = outputs[1:].permute(1, 0, 2).argmax(2)
                 trg = target[1:].permute(1, 0)
-                for i in range(2):
+                gens = []
+                targets = []
+                for i in range(pred.shape[0]):
                     indices = pred[i]
-                    words = [dataloader.dataset.output_vocab_rev[p.item()] for p in pred[i]]
-                    print("Prediction")
-                    print(indices)
-                    print(words)
-                    print("Target")
-                    print(trg[i])
-                    print([dataloader.dataset.output_vocab_rev[p.item()] for p in trg[i]])
+                    p_words = [dataloader.dataset.output_vocab_rev[p.item()] for p in pred[i]]
+                    gens.append(p_words)
+                    t_words = [dataloader.dataset.output_vocab_rev[p.item()] for p in trg[i]]
+                    targets.append(t_words)
+                    if i < 5:
+                        print("Prediction")
+                        print(indices)
+                        print(p_words)
+                        print("Target")
+                        print(trg[i])
+                        print(t_words)
 
+                score1 = evaluate(gens, targets, 1)
+                score2 = evaluate(gens, targets, 2)
+                score3 = evaluate(gens, targets, 3)
+                score4 = evaluate(gens, targets, 4)
+                print("blue1:", score1)
+                print("blue2:", score2)
+                print("blue3:", score3)
+                print("blue4:", score4)
 
         avg_loss = total_loss / len(dataloader)
         print(f"Average loss {avg_loss}")
         wandb.log({"epoch": e, "loss": avg_loss})
 
-        if best_loss is None or avg_loss < best_loss:
+        if best_loss is None or (avg_loss < best_loss and e > (epoch // 2)):
             best_loss = avg_loss
-            torch.save(model.state_dict(), os.path.join("saved_models", f"model_{e}_{learning_rate}_{teacher_forcing_ratio}.pt"))
+            torch.save(model.state_dict(), os.path.join("saved_models", f"{time_id}_{learning_rate}_{teacher_forcing_ratio}.pt"))
     
-    torch.save(model.state_dict(), f"model_{epoch}_{learning_rate}_{teacher_forcing_ratio}.pt")
-
 def test(model, dataloader):
     model.eval()
     criterion = nn.CrossEntropyLoss()
@@ -125,24 +139,25 @@ def test(model, dataloader):
             loss = torch.mean(loss)
             total_loss += loss.item()
             
-            pred = outputs.permute(1, 0, 2).argmax(2)
+            pred = outputs[1:].permute(1, 0, 2).argmax(2)
             trg = target[1:].permute(1, 0)
             words = [dataloader.dataset.output_vocab_rev[p.item()] for p in pred[0]]
-            generations.append(" ".join(words))
-            print("Prediction")
-            print(words)
+            generations.append(words)
+            # print("Prediction")
+            # print(words)
             words = [dataloader.dataset.output_vocab_rev[p.item()] for p in trg[0]]
-            print("Target")
-            print(words) 
-            targets.append(" ".join(words))
+            # print("Target")
+            # print(words) 
+            targets.append(words)
 
         avg_loss = total_loss / len(dataloader)
         wandb.log({"test_loss": avg_loss})
 
-    with open("output.txt", 'w') as file:
-        file.writelines(generations)
-    bleu_score = evaluate(generations, targets)
-    return generations, bleu_score
+    bleu_score_1 = evaluate(generations, targets, 1)
+    bleu_score_2 = evaluate(generations, targets, 2)
+    bleu_score_3 = evaluate(generations, targets, 3)
+    bleu_score_4 = evaluate(generations, targets, 4)
+    return generations, bleu_score_1, bleu_score_2, bleu_score_3, bleu_score_4
     
 if __name__=="__main__":
     parser = argparse.ArgumentParser("Train script for Code Comment Generation")
@@ -151,6 +166,7 @@ if __name__=="__main__":
     parser.add_argument("--teacher_forcing_ratio", type=float, default=0.5)
     parser.add_argument("--model", type=str, default="base", choices=["base", "AST", "Doc", "Full"], help="Model type to use (base, AST, Doc, Full)")
     parser.add_argument("--loadpath")
+    parser.add_argument("--resume", type=int, default=0)
     parser.add_argument("--datapoints", type=int, default=1000)
     args = parser.parse_args()
 
@@ -220,13 +236,12 @@ if __name__=="__main__":
     print(model)
 
     # Train
-    if not args.loadpath:
-        print("Loading training data...")
-        df_train = pd.read_pickle('./data/df_test_reduced.pkl').head(args.datapoints)
-        train_loader = get_data_loader(df_train, test=False)
-        print("Train data loaded")
+    print("Loading training data...")
+    df_train = pd.read_pickle('./data/df_test_reduced.pkl').head(args.datapoints)
+    train_loader = get_data_loader(df_train, test=False)
+    print("Train data loaded")
 
-        train(model, train_loader, args.epoch, args.learning_rate, args.teacher_forcing_ratio)
+    train(model, train_loader, args.epoch, args.learning_rate, args.teacher_forcing_ratio, args.resume)
 
     # Test
     print("Loading test data...")
@@ -234,10 +249,12 @@ if __name__=="__main__":
     test_loader = get_data_loader(df_test, test=True) 
     print("Test data loaded")
     
-    generations, score = test(model, test_loader)
-    print(f"BLEU-4 Score: {score}")
-    wandb.log({"bleu_score": score})
-    wandb.log({"generations": generations})
+    generations, score1, score2, score3, score4 = test(model, test_loader)
+    print(f"BLEU-1 Score: {score1}")
+    print(f"BLEU-2 Score: {score2}")
+    print(f"BLEU-3 Score: {score3}")
+    print(f"BLEU-4 Score: {score4}")
+    wandb.log({"bleu_score1": score1, "bleu_score2": score2, "bleu_score3": score3, "bleu_score4": score4})
 
     with open("output.txt", 'w') as file:
         gens = [" ".join(gen) for gen in generations]
