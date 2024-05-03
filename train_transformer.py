@@ -47,45 +47,54 @@ class TrainData(Dataset):
 def train_epoch(model, dataloader, optimizer, lossfn, embed_size):
     model.train()
     total_loss = 0
-    for src, tgt in tqdm(dataloader):
-        tgt_input = tgt[:, :-1]
-        tgt_output = tgt[:, 1:]
+    for input, output in tqdm(dataloader):
         optimizer.zero_grad()
-        output = model(src, tgt_input)
-        tgt_new =  tgt_output.reshape(-1)
-        loss = lossfn(output.view(-1, embed_size), tgt_new)
-        loss = torch.mean(loss.masked_fill(tgt_new == torch.zeros_like(tgt_new), 0))
+        output_firstk = output[:, :-1]
+        model_output = model(input, output_firstk)
+
+        output_lastk = model_output[:, 1:].reshape(-1)
+        loss = lossfn(model_output.reshape(-1, embed_size), output_lastk)
+
+        loss = torch.mean(loss.masked_fill(output_lastk == torch.zeros_like(output_lastk), 0))
         loss.backward()
+
         optimizer.step()
         total_loss += loss.item()
+
     return total_loss / len(dataloader)
 
 def test_model(model, dataloader, lossfn, embed_size, output_vocab, num_samples=0):
     model.eval()
     total_loss = 0
     total_count = 0
+    
+    torch.set_grad_enabled(False)
+   
+    for idx, (input, output) in enumerate(dataloader):
+        num_elems = output.size[0]
+        output_firstk = output[:, :-1]
+        output_lastk = output[:, 1:].reshape(-1)
 
-    with torch.no_grad():
-        for idx, (src, tgt) in enumerate(dataloader):
-            tgt_input = tgt[:, :-1]
-            tgt_output = tgt[:, 1:]
-            output = model(src, tgt_input)
-            loss = lossfn(output.view(-1, embed_size), tgt_output.reshape(-1))
-            total_loss += loss.item() * tgt_output.size(0)  
-            total_count += tgt_output.size(0)
+        model_output = model(input, output_firstk)
+        loss = lossfn(model_output.reshape(-1, embed_size), output_lastk)
 
-            if idx < num_samples:
-                predicted_ids = output.argmax(-1)
-                print(f"Sample {idx+1}:")
-                print("Source:", src)
-                actual = []
-                for aid in tgt_output[0]:
-                    actual.append(output_vocab[int(aid)])
-                print("Target Actual:", actual)
-                predict = []
-                for pid in predicted_ids:
-                    predict.append(output_vocab[int(pid[0])])
-                print("Target Predicted:", predict)
+        total_loss += loss.item() * num_elems
+        total_count += num_elems
+
+        if idx < num_samples:
+            predicted_ids = model_output.argmax(-1)
+            print(f"Sample {idx+1}:")
+            print("Source:", input)
+            actual = []
+            for aid in output_lastk[0]:
+                actual.append(output_vocab[int(aid)])
+            print("Target Actual:", actual)
+            predict = []
+            for pid in predicted_ids:
+                predict.append(output_vocab[int(pid[0])])
+            print("Target Predicted:", predict)
+
+    torch.set_grad_enabled(True)
 
     average_loss = total_loss / total_count
     print(average_loss)
@@ -100,8 +109,9 @@ if __name__=="__main__":
     train_ast_tokens = train_df['processed_func_code_tokens'].tolist()
     test_ast_tokens = test_df['processed_func_code_tokens'].tolist()
 
-    train_custom_data = get_data_loader(train_df, test=False)
-    test_custom_data = get_data_loader(test_df, test=True)
+    cvocab, cvocab_rev, avocab, avocab_rev, dvocab, dvocab_rev, ovocab, ovocab_rev = get_vocabs(pd.concat([train_df, test_df]), 2048, 100, 512, 1024)
+    train_custom_data = get_data_loader(train_ast_tokens, cvocab, avocab, dvocab, ovocab, TRAIN_BATCH_SIZE, 'AST')
+    test_custom_data = get_data_loader(test_ast_tokens, cvocab, avocab, dvocab, ovocab, TEST_BATCH_SIZE, 'AST') 
 
     train_dataset = TrainData(train_ast_tokens, train_custom_data.dataset.output_encoded)
     test_dataset = TrainData(test_ast_tokens, test_custom_data.dataset.output_encoded, train_dataset.idxs)

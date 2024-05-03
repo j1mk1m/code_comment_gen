@@ -1,10 +1,7 @@
-"""
-- This is da transformer model (with multi-headed self attention !!)
-"""
-
 import torch
 import torch.nn as nn
 
+# Code Referenced from jpaulraj 10-423: HW1
 class RotaryPositionalEmbeddings(nn.Module):
     def __init__(self, d: int, base: int = 10_000):
         super().__init__()
@@ -68,6 +65,7 @@ class Transformer(nn.Module):
         self.pos_embed = RotaryPositionalEmbeddings(dk)
         self.encoder = nn.Embedding(n_embed, dk)
         self.decoder = nn.Embedding(n_embed, dk)
+        
         self.encode_masker = Mask()
         self.decode_masker = Mask()
 
