@@ -65,7 +65,7 @@ class Transformer(nn.Module):
         self.pos_embed = RotaryPositionalEmbeddings(dk)
         self.encoder = nn.Embedding(n_embed, dk)
         self.decoder = nn.Embedding(n_embed, dk)
-        
+
         self.encode_masker = Mask()
         self.decode_masker = Mask()
 
@@ -81,8 +81,10 @@ class Transformer(nn.Module):
 
         _, input_len = input.size()
         _, output_len = output.size()
+
         input_mask = self.encode_masker.get_mask(input_len)
         output_mask = self.decode_masker.get_mask(output_len)
+        
         transform_out = self.transformer(pos_encode_input, pos_decode_output, input_mask, output_mask)
         return self.linear_out(transform_out)
 
