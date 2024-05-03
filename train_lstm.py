@@ -17,7 +17,7 @@ from dataset import *
 TRAIN_BATCH_SIZE = 32
 TEST_BATCH_SIZE = 1
 # Code Encoder
-CODE_DIM = 2048
+CODE_DIM = 2000
 CODE_ENC_EMBED_DIM = 128
 CODE_ENC_HIDDEN_DIM = 1024
 CODE_ENC_DROPOUT = 0.1
@@ -32,7 +32,7 @@ DOC_ENC_EMBED_DIM = 64
 DOC_ENC_HIDDEN_DIM = 256 
 DOC_ENC_DROPOUT = 0.1
 # Decoder
-OUTPUT_DIM = 1024
+OUTPUT_DIM = 2000
 DEC_EMBED_DIM = 128
 DEC_HIDDEN_DIM = 1024
 DEC_NUM_LAYERS = 1
@@ -214,7 +214,8 @@ if __name__=="__main__":
 
     cvocab, cvocab_rev, avocab, avocab_rev, dvocab, dvocab_rev, ovocab, ovocab_rev = get_vocabs(df_all, CODE_DIM, AST_DIM, DOC_DIM, OUTPUT_DIM)
     train_loader = get_data_loader(df_train, cvocab, avocab, dvocab, ovocab, TRAIN_BATCH_SIZE, args.model)
-    test_loader = get_data_loader(df_test, cvocab, avocab, dvocab, ovocab, TEST_BATCH_SIZE, args.model) 
+    test_loader = get_data_loader(df_test, cvocab, avocab, dvocab, ovocab, TEST_BATCH_SIZE, args.model)
+    val_loader = get_data_loader(df_train, cvocab, avocab, dvocab, ovocab, TEST_BATCH_SIZE, args.model)
     print("Data loaded")
 
     # MODEL
@@ -261,6 +262,13 @@ if __name__=="__main__":
     if not args.test:
         train(model, train_loader, ovocab_rev, args.epoch, args.learning_rate, args.teacher_forcing_ratio, args.resume, args.model)
     
+    generations, score1, score2, score3, score4 = test(model, val_loader, ovocab_rev)
+    print(f"BLEU-1 Score: {score1}")
+    print(f"BLEU-2 Score: {score2}")
+    print(f"BLEU-3 Score: {score3}")
+    print(f"BLEU-4 Score: {score4}")
+    wandb.log({"train_bleu_score1": score1, "train_bleu_score2": score2, "train_bleu_score3": score3, "train_bleu_score4": score4})
+
     generations, score1, score2, score3, score4 = test(model, test_loader, ovocab_rev)
     print(f"BLEU-1 Score: {score1}")
     print(f"BLEU-2 Score: {score2}")

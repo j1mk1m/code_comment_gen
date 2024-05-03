@@ -69,15 +69,9 @@ def get_data_loader(series, cvocab, avocab, dvocab, ovocab, batch_size, mode):
     return DataLoader(dataset, batch_size, shuffle=False)
 
 if __name__=="__main__":
-    df_train = pd.read_pickle('./data/df_train_reduced.pkl').head(1000)
-    train_loader = get_data_loader(df_train, test=False)
+    df_train = pd.read_pickle('./data/df_test_reduced.pkl').head(5)
 
-    input_vocab = train_loader.dataset.input_vocab.items()
-    input_vocab_rev = train_loader.dataset.input_vocab_rev.items()
-    output_vocab = train_loader.dataset.output_vocab.items()
-    output_vocab_rev = train_loader.dataset.output_vocab_rev.items()
+    print(df_train.iloc[0])
 
-    print(input_vocab_rev)
-    print(output_vocab_rev)
 
 
